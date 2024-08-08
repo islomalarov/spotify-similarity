@@ -17,6 +17,13 @@ import { initializePositions } from '../../../lib/changePositions';
 import { getSimilarSongs } from '../../../lib/getSimilarSongs';
 import RecommendedSongs from '../TheRecommendedSongs/RecommendedSongs';
 
+// Расширяем тип fabric.Canvas для поддержки кастомных свойств
+interface CustomCanvas extends fabric.Canvas {
+  isDragging?: boolean;
+  lastPosX?: number;
+  lastPosY?: number;
+}
+
 const SongCanvas: React.FC<SongCanvasProps> = ({ songs, matrix }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fabricCanvasRef = useRef<fabric.Canvas | null>(null);
@@ -89,7 +96,7 @@ const SongCanvas: React.FC<SongCanvasProps> = ({ songs, matrix }) => {
     }
 
     // Создание нового экземпляра
-    const canvas: fabric.Canvas = fabricCanvas(canvasElement);
+    const canvas: CustomCanvas = fabricCanvas(canvasElement);
     fabricCanvasRef.current = canvas;
 
     const width = canvasElement.width;
@@ -131,20 +138,37 @@ const SongCanvas: React.FC<SongCanvasProps> = ({ songs, matrix }) => {
       if (opt.e.altKey === true) {
         canvas.isDragging = true;
         canvas.selection = false;
-        canvas.lastPosX = opt.e.clientX;
-        canvas.lastPosY = opt.e.clientY;
+
+        // Обработка разных типов событий
+        const event = opt.e as MouseEvent | TouchEvent;
+        if ('clientX' in event && 'clientY' in event) {
+          canvas.lastPosX = event.clientX;
+          canvas.lastPosY = event.clientY;
+        } else if ('touches' in event && event.touches.length > 0) {
+          canvas.lastPosX = event.touches[0].clientX;
+          canvas.lastPosY = event.touches[0].clientY;
+        }
       }
     });
 
     canvas.on('mouse:move', (opt) => {
       if (canvas.isDragging) {
-        const e = opt.e as MouseEvent;
-        const vpt = canvas.viewportTransform!;
-        vpt[4] += e.clientX - canvas.lastPosX;
-        vpt[5] += e.clientY - canvas.lastPosY;
-        canvas.requestRenderAll();
-        canvas.lastPosX = e.clientX;
-        canvas.lastPosY = e.clientY;
+        const event = opt.e as MouseEvent | TouchEvent;
+        if ('clientX' in event && 'clientY' in event) {
+          const vpt = canvas.viewportTransform!;
+          vpt[4] += event.clientX - (canvas.lastPosX || 0);
+          vpt[5] += event.clientY - (canvas.lastPosY || 0);
+          canvas.requestRenderAll();
+          canvas.lastPosX = event.clientX;
+          canvas.lastPosY = event.clientY;
+        } else if ('touches' in event && event.touches.length > 0) {
+          const vpt = canvas.viewportTransform!;
+          vpt[4] += event.touches[0].clientX - (canvas.lastPosX || 0);
+          vpt[5] += event.touches[0].clientY - (canvas.lastPosY || 0);
+          canvas.requestRenderAll();
+          canvas.lastPosX = event.touches[0].clientX;
+          canvas.lastPosY = event.touches[0].clientY;
+        }
       }
     });
 
